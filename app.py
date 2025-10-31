@@ -1,76 +1,61 @@
 import streamlit as st
-import numpy as np
 import pandas as pd
+import numpy as np
 
 
 questions = pd.read_csv("career_questions.csv")
 ds = pd.read_csv("prepared_dataset.csv")
 
 careers = ds["Career"].unique()
-career_counts = [0]*len(careers)
+career_index = {c: i for i, c in enumerate(careers)}
 
+answers = [None] * len(questions)
 
+st.title("Career Recommender System")
+st.write("Answer the questions below to get career recommendations.")
 
-def count_careers(index):
-    q_ds = ds[ds["QNo"] == index]
-    answer = user_answers[index]
-    answer_name = ""
-    if answer == 0:
-        answer_name = "Answer_A"
-    elif answer == 1:
-        answer_name = "Answer_B"
-    elif answer == 2:
-        answer_name = "Answer_C"
-    else:
-        answer_name = "Answer_D"            
-    answer_ds = q_ds[q_ds[answer_name] == 1][["Career"]].reset_index(drop = True)
-    for row in answer_ds.index:
-        for j in range(0, len(careers)):
-            if answer_ds.iloc[row]["Career"] == careers[j]:
-                career_counts[j] = career_counts[j] + 1
-
-
-st.title("Career Recommender")
-# st.markdown("""
-#     <style>
-#    .stApp {
-#         background-color: #121212;
-#         color: #f1f1f1;
-#         font-family: 'Segoe UI', sans-serif;
-#     }
-#     </style>
-# """, unsafe_allow_html=True)
-
-answers= [0]*20
-
-
-for i in questions.index:
-    Answer_A = questions.iloc[i]["Answer A"]
-    Answer_B = questions.iloc[i]["Answer B"]
-    Answer_C = questions.iloc[i]["Answer C"]
-    Answer_D = questions.iloc[i]["Answer D"]
-
-    options = ["Not Selected" , Answer_A ,Answer_B ,Answer_C,Answer_D]
-
-    selected = st.radio(str((i+1))+ "." + questions.iloc[i]["Question"],
-            options,index = 0              
-            )
-    
-    answers[i]=options.index(selected)
+for i, row in questions.iterrows():
+    options = [
+        row["Answer A"],
+        row["Answer B"],
+        row["Answer C"],
+        row["Answer D"],
+    ]
+    selected = st.radio(
+        f"{i+1}. {row['Question']}",
+        options,
+        index=0,
+        key=f"q_{i}"
+    )
+    answers[i] = options.index(selected) 
 
 
 if st.button("Recommend"):
-    user_answers=[]
-    st.write("Recommended Career is : ")
-    for answer in answers:
-        user_answers.append(answer)
-    for i in range (0,len(user_answers)):
-        count_careers(i)
-    st.write("Recommended Career is  ",careers[np.argmax(career_counts)])
-  
-    
+   
+    career_counts = [0] * len(careers)
 
-    
+    for i, ans in enumerate(answers):
+        if ans is None:
+            continue
 
+        qno = i + 1
+        q_ds = ds[ds["QNo"] == qno]
 
+        answer_col = ["Answer_A", "Answer_B", "Answer_C", "Answer_D"][ans]
+        matched_careers = q_ds[q_ds[answer_col] == 1]["Career"].unique()
 
+        for c in matched_careers:
+            career_counts[career_index[c]] += 1
+
+    results_df = pd.DataFrame({
+        "Career": careers,
+        "Score": career_counts
+    }).sort_values(by="Score", ascending=False)
+
+    # Show Top 3 careers
+    st.subheader("Top Career Recommendations")
+    for idx, row in results_df.head(3).iterrows():
+        st.write(f"**{row['Career']}** — Score: {row['Score']}")
+
+    if results_df["Score"].max() == 0:
+        st.warning("No clear recommendation — please answer more questions.")
